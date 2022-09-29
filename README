@@ -1,1 +1,15 @@
 Currently works only with SBCL due to loack of external-formats of flexi-streams
+
+
+Note: This is a fork of Clonsigna as found at https://gitlab.common-lisp.net/clonsigna/clonsigna
+
+It uses usocket instead of IOlibs, as the latter refused to play nice on my system.
+
+
+Basic use:
+
+(defparameter *imap* (make-imap :host <host> :port <port> :ssl-p <t / nil>))
+
+(cmd-connect *imap*)
+
+(cmd-login *imap* <email> <password>)

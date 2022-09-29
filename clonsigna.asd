@@ -31,7 +31,7 @@
   :name "clonsigna"
   :author "Andrea Chiumenti"
   :description "Simple IMAP4rev1 client library"
-  :depends-on (:iolib :cl-base64 :cl-ppcre :split-sequence :alexandria :cl+ssl 
+  :depends-on (:usocket :cl-base64 :cl-ppcre :split-sequence :alexandria :cl+ssl 
                :babel)
   :components ((:module src
                         :components ((:file "packages")

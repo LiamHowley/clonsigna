@@ -434,22 +434,39 @@ On failure a condition of type OPERATIONAL-ERROR or SERVER-ERROR will be signale
   (imap-socket-read-reply is))
 
 
-(defmethod cmd-connect ((is imap-socket))
-  (let ((iolib-stream (iolib:make-socket :address-family :internet
-                                                       :type :stream
-                                                       :connect :active
-                                                       :external-format '(:latin-1)
-                                                       :remote-host (imap-socket-remote-host is)
-                                                       :remote-port (imap-socket-remote-port is))))
-    (setf (imap-socket-socket is) (if (imap-socket-ssl-p is)
-                                      (cl+ssl:make-ssl-client-stream (iolib:socket-os-fd iolib-stream)
-                                                                     :external-format :latin-1)
-                                      iolib-stream)))
-  (setf (imap-socket-capabilities is) (parse-capability (cmd-capability is))))
+(defun convert-connection-to-ssl (stream)
+  ;; lifted from cl-smtp
+  (let ((flexi-external-format (flexi-streams:flexi-stream-external-format stream)))
+    (setf stream 
+	  #+allegro (socket:make-ssl-client-stream stream)
+	  #-allegro
+	  (let ((s (flexi-streams:flexi-stream-stream stream)))
+	    (cl+ssl:make-ssl-client-stream 
+	     (cl+ssl:stream-fd s)
+	     :close-callback (lambda () (close s)))))
+    #-allegro
+    (setf stream (flexi-streams:make-flexi-stream 
+		  stream
+		  :external-format flexi-external-format))
+    stream))
 
-  (defmethod cmd-login ((is imap-socket) login password)
-    (imap-socket-send-command is :login login password)
-    (imap-socket-read-reply is))
+
+(defmethod cmd-connect ((is imap-socket))
+  (let* ((socket (usocket:socket-connect (imap-socket-remote-host is)
+					 (imap-socket-remote-port is)
+					 :element-type 'unsigned-byte))
+	 (stream (flexi-streams:make-flexi-stream
+		  (usocket:socket-stream socket) 
+		  :external-format (flexi-streams:make-external-format :utf-8 :eol-style :lf))))
+    (setf (imap-socket-socket is) (if (imap-socket-ssl-p is)
+				      (convert-connection-to-ssl stream)
+				      stream)
+	  (imap-socket-capabilities is) (parse-capability (cmd-capability is)))))
+
+
+(defmethod cmd-login ((is imap-socket) login password)
+  (imap-socket-send-command is :login login password)
+  (imap-socket-read-reply is))
 
 (defmethod cmd-select ((is imap-socket) mailbox-name)
   (imap-socket-send-command is :select (%pathname-to-mailbox is mailbox-name))
@@ -594,8 +611,7 @@ On failure a condition of type OPERATIONAL-ERROR or SERVER-ERROR will be signale
   (imap-socket-send-command is :starttls)
   (multiple-value-bind (reply result-op result-op-description)
       (imap-socket-read-reply is)
-    (setf (imap-socket-socket is) (cl+ssl:make-ssl-client-stream (iolib:socket-os-fd (imap-socket-socket is))
-                                                                 :external-format :latin-1))
+    (setf (imap-socket-socket is) (convert-connection-to-ssl (imap-socket-socket is)))
     (values reply result-op result-op-description)))
 
 (defmethod cmd-authenticate-plain ((is imap-socket) login password)
